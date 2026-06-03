@@ -1,0 +1,27 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "Malaysian Economic Pulse"
+  description: "A data engineering project tracking cost-of-living pressure across Malaysia"
+  navbar:
+    background: dark
+    title: "🇲🇾 Malaysian Economic Pulse"
+  page-footer:
+    center: "Data: data.gov.my · DOSM · Built with DuckDB, dbt, Quarto · Refreshed monthly via GitHub Actions"
+
+execute:
+  freeze: false
+
+format:
+  html:
+    theme: darkly
+    toc: false
+    page-layout: full
+    include-in-header:
+      text: |
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+          body { font-family: 'DM Sans', sans-serif; }
+        </style>

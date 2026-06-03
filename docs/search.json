@@ -1,0 +1,51 @@
+[
+  {
+    "objectID": "dashboard/index.html",
+    "href": "dashboard/index.html",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "",
+    "text": "Note\n\n\n\nScore reflects cost-of-living pressure on a 0–100 scale. Higher = more pressure on Malaysian households. Components: food prices (30%), fuel cost (25%), CPI (25%), public transport uptake (10%), EV adoption (10%)."
+  },
+  {
+    "objectID": "dashboard/index.html#the-pulse-2026-05",
+    "href": "dashboard/index.html#the-pulse-2026-05",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "",
+    "text": "Note\n\n\n\nScore reflects cost-of-living pressure on a 0–100 scale. Higher = more pressure on Malaysian households. Components: food prices (30%), fuel cost (25%), CPI (25%), public transport uptake (10%), EV adoption (10%)."
+  },
+  {
+    "objectID": "dashboard/index.html#fuel-price-timeline",
+    "href": "dashboard/index.html#fuel-price-timeline",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "Fuel Price Timeline",
+    "text": "Fuel Price Timeline"
+  },
+  {
+    "objectID": "dashboard/index.html#food-price-trends",
+    "href": "dashboard/index.html#food-price-trends",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "Food Price Trends",
+    "text": "Food Price Trends"
+  },
+  {
+    "objectID": "dashboard/index.html#state-level-price-heatmap",
+    "href": "dashboard/index.html#state-level-price-heatmap",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "State-level Price Heatmap",
+    "text": "State-level Price Heatmap"
+  },
+  {
+    "objectID": "dashboard/index.html#ev-adoption-vs-public-transport",
+    "href": "dashboard/index.html#ev-adoption-vs-public-transport",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "EV Adoption vs Public Transport",
+    "text": "EV Adoption vs Public Transport"
+  },
+  {
+    "objectID": "dashboard/index.html#cdc-audit-log-recent-data-changes",
+    "href": "dashboard/index.html#cdc-audit-log-recent-data-changes",
+    "title": "🇲🇾 Malaysian Economic Pulse",
+    "section": "CDC Audit Log — Recent Data Changes",
+    "text": "CDC Audit Log — Recent Data Changes\n\n\n| Detected At      | Source           | Entity          | Field         |   Old Value |   New Value | Type   |\n|:-----------------|:-----------------|:----------------|:--------------|------------:|------------:|:-------|\n| 2026-06-02 19:52 | household_income | Johor           | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1583 |        1606 | UPDATE |\n| 2026-06-02 19:52 | household_income | Kelantan        | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Melaka          | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Negeri Sembilan | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Pahang          | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Perak           | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Kedah           | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Pulau Pinang    | income_median |             |             | INSERT |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |             |         309 | INSERT |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         309 |         493 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         493 |         749 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         749 |         726 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         726 |         863 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         863 |         994 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |         994 |        1133 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1133 |        1390 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1390 |        1264 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1264 |        1583 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        3745 |        4110 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1606 |        1189 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        1189 |        2066 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        2066 |        2860 | UPDATE |\n| 2026-06-02 19:52 | household_income | Sabah           | income_median |        2860 |        3745 | UPDATE |\n| 2026-06-02 19:52 | household_income | Perlis          | income_median |             |             | INSERT |"
+  }
+]

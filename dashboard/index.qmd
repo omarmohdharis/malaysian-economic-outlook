@@ -1,0 +1,284 @@
+---
+title: "🇲🇾 Malaysian Economic Pulse"
+subtitle: "Cost-of-living pressure index — powered by data.gov.my"
+execute:
+  echo: false
+  warning: false
+jupyter: python3
+---
+
+```{python}
+import sys, os
+from pathlib import Path
+
+# When Quarto runs this, cwd is the dashboard/ folder
+PROJECT_ROOT = Path(os.getcwd()).parent
+sys.path.insert(0, str(PROJECT_ROOT / "ingestion"))
+
+import duckdb
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import date
+
+DB = str(PROJECT_ROOT / "warehouse" / "pulse.duckdb")
+con = duckdb.connect(DB, read_only=True)
+
+HOVER = dict(bgcolor="#1e1e2e", font_color="white", bordercolor="rgba(255,255,255,0.2)")
+CHART_LAYOUT = dict(
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="DM Sans", color="white"),
+    margin=dict(l=0, r=0, t=40, b=0),
+    hoverlabel=HOVER,
+)
+```
+
+```{python}
+# ── Pulse score ───────────────────────────────────────────────────────────────
+pulse_df   = con.execute("SELECT * FROM main_marts.mart_economic_pulse ORDER BY month").df()
+latest     = pulse_df.iloc[-1]
+prev       = pulse_df.iloc[-2] if len(pulse_df) > 1 else latest
+score      = latest["pulse_score"]
+score_prev = prev["pulse_score"]
+score_chg  = score - score_prev
+label      = latest["pressure_label"]
+month_str  = latest["month"]
+arrow      = "↑" if score_chg > 0 else "↓"
+color      = "#ef4444" if score_chg > 0 else "#22c55e"
+```
+
+## The Pulse — `{python} month_str`
+
+::: {.callout-note}
+Score reflects **cost-of-living pressure** on a 0–100 scale. Higher = more pressure on Malaysian households.
+Components: food prices (30%), fuel cost (25%), CPI (25%), public transport uptake (10%), EV adoption (10%).
+:::
+
+```{python}
+fig_gauge = go.Figure(go.Indicator(
+    mode="gauge+number+delta",
+    value=score,
+    delta={"reference": score_prev, "valueformat": ".1f",
+           "increasing": {"color": "#ef4444"}, "decreasing": {"color": "#22c55e"}},
+    title={"text": f"<b>{label}</b><br><span style='font-size:0.85rem;color:rgba(255,255,255,0.5)'>{month_str}</span>"},
+    gauge={
+        "axis": {"range": [0, 100], "tickcolor": "rgba(255,255,255,0.4)"},
+        "bar":  {"color": "#FFD166"},
+        "steps": [
+            {"range": [0, 33],  "color": "rgba(34,197,94,0.25)"},
+            {"range": [33, 66], "color": "rgba(255,209,102,0.25)"},
+            {"range": [66, 100],"color": "rgba(239,68,68,0.25)"},
+        ],
+        "threshold": {"line": {"color": "white", "width": 2}, "value": score},
+    },
+    number={"suffix": " / 100", "font": {"size": 40, "color": "white"}},
+))
+fig_gauge.update_layout(
+    height=300,
+    paper_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="DM Sans", color="white"),
+    margin=dict(l=40, r=40, t=20, b=20),
+)
+fig_gauge.show()
+```
+
+```{python}
+# Pulse score history line
+fig_pulse = px.line(
+    pulse_df, x="month", y="pulse_score",
+    markers=True,
+    title="Pulse Score History",
+    labels={"pulse_score": "Pressure Score (0–100)", "month": ""},
+    color_discrete_sequence=["#FFD166"],
+)
+fig_pulse.add_hrect(y0=0,  y1=33,  fillcolor="rgba(34,197,94,0.07)",  line_width=0)
+fig_pulse.add_hrect(y0=33, y1=66,  fillcolor="rgba(255,209,102,0.07)", line_width=0)
+fig_pulse.add_hrect(y0=66, y1=100, fillcolor="rgba(239,68,68,0.07)",   line_width=0)
+fig_pulse.update_traces(
+    line=dict(width=2.5), marker=dict(size=7),
+    hovertemplate="<b>%{x}</b><br>Score: %{y:.1f}<extra></extra>",
+)
+fig_pulse.update_layout(**CHART_LAYOUT, height=300,
+    yaxis=dict(range=[0,100], showgrid=True, gridcolor="rgba(255,255,255,0.08)"),
+    xaxis=dict(showgrid=False),
+)
+fig_pulse.show()
+```
+
+---
+
+## Fuel Price Timeline
+
+```{python}
+fuel_df = con.execute("SELECT * FROM main_marts.mart_fuel_timeline ORDER BY fuel_date").df()
+
+fig_fuel = px.line(
+    fuel_df, x="fuel_date", y="price", color="fuel_type",
+    markers=False,
+    title="Weekly Fuel Prices — RON95 / RON97 / Diesel",
+    labels={"price": "Price (RM/litre)", "fuel_date": "", "fuel_type": ""},
+    color_discrete_map={"RON95": "#4ade80", "RON97": "#FFD166", "DIESEL": "#94a3b8"},
+)
+# Annotate UP/DOWN changes for RON95
+changes = fuel_df[(fuel_df["fuel_type"] == "RON95") & (fuel_df["change_direction"].isin(["UP","DOWN"]))]
+for _, r in changes.tail(20).iterrows():
+    fig_fuel.add_annotation(
+        x=r["fuel_date"], y=r["price"],
+        text="▲" if r["change_direction"] == "UP" else "▼",
+        showarrow=False, font=dict(size=10,
+        color="#ef4444" if r["change_direction"] == "UP" else "#22c55e"),
+        yshift=12,
+    )
+fig_fuel.update_traces(
+    line=dict(width=2),
+    hovertemplate="<b>%{fullData.name}</b><br>%{x}<br>RM %{y:.3f}<extra></extra>",
+)
+fig_fuel.update_layout(**CHART_LAYOUT, height=360,
+    xaxis=dict(showgrid=False),
+    yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.08)"),
+    legend=dict(orientation="h", y=1.08, x=0),
+)
+fig_fuel.show()
+```
+
+---
+
+## Food Price Trends
+
+```{python}
+price_df = con.execute("SELECT * FROM main_marts.mart_price_summary ORDER BY month").df()
+
+LABELS = {
+    "AYAM":"Chicken","TELUR":"Eggs","BERAS":"Rice","MINYAK DAN LEMAK":"Cooking Oil",
+    "BAWANG":"Onions","SAYUR-SAYURAN":"Vegetables","BAHAN LAUT":"Seafood",
+    "IKAN DARAT":"Freshwater Fish","BUAH-BUAHAN":"Fruits",
+}
+national_food = (
+    price_df.groupby(["month","item_category"])["median_price"]
+    .mean().reset_index()
+    .sort_values("month")
+)
+national_food["label"] = national_food["item_category"].map(lambda x: LABELS.get(x, x))
+
+fig_food = px.line(
+    national_food, x="month", y="median_price", color="label",
+    markers=True,
+    title="National Median Food Prices by Category",
+    labels={"median_price": "Median Price (RM)", "month": "", "label": ""},
+)
+fig_food.update_traces(
+    line=dict(width=2), marker=dict(size=6),
+    hovertemplate="<b>%{fullData.name}</b><br>%{x}<br>RM %{y:.2f}<extra></extra>",
+)
+fig_food.update_layout(**CHART_LAYOUT, height=400,
+    xaxis=dict(showgrid=False),
+    yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.08)"),
+    legend=dict(orientation="v", x=1.01, y=1, bgcolor="rgba(30,30,30,0.8)",
+                bordercolor="rgba(255,255,255,0.15)", borderwidth=1),
+)
+fig_food.show()
+```
+
+---
+
+## State-level Price Heatmap
+
+```{python}
+latest_month = price_df["month"].max()
+state_cat = (
+    price_df[price_df["month"] == latest_month]
+    .groupby(["state","item_category"])["median_price"]
+    .mean().reset_index()
+)
+state_cat["label"] = state_cat["item_category"].map(lambda x: LABELS.get(x, x))
+pivot = state_cat.pivot(index="state", columns="label", values="median_price")
+
+fig_heat = px.imshow(
+    pivot, aspect="auto",
+    color_continuous_scale=["#4ade80","#FFD166","#ef4444"],
+    labels=dict(color="Median Price (RM)"),
+    text_auto=".2f",
+    title=f"Median Price by State × Category · {latest_month}",
+)
+fig_heat.update_layout(**CHART_LAYOUT, height=520,
+    xaxis_title="", yaxis_title="",
+    coloraxis_colorbar=dict(title="RM", thickness=12),
+)
+fig_heat.show()
+```
+
+---
+
+## EV Adoption vs Public Transport
+
+```{python}
+vehicles_df  = con.execute("SELECT * FROM main_staging.stg_vehicles ORDER BY month").df()
+transport_df = con.execute("SELECT month, sum(ridership) as ridership FROM main_staging.stg_transport GROUP BY 1 ORDER BY 1").df()
+
+ev_monthly = (
+    vehicles_df.assign(
+        is_ev=vehicles_df["fuel_type"].str.lower().isin(["electric","ev","bev","phev"])
+    )
+    .groupby("month")
+    .apply(lambda g: pd.Series({
+        "ev_share": g.loc[g["is_ev"], "registrations"].sum() / g["registrations"].sum() * 100,
+        "total_regs": g["registrations"].sum(),
+    }))
+    .reset_index()
+)
+
+fig_ev = go.Figure()
+fig_ev.add_trace(go.Scatter(
+    x=ev_monthly["month"], y=ev_monthly["ev_share"],
+    mode="lines+markers", name="EV share of new registrations (%)",
+    line=dict(color="#4ade80", width=2.5), marker=dict(size=6),
+    hovertemplate="<b>EV Share</b><br>%{x}<br>%{y:.2f}%<extra></extra>",
+    yaxis="y1",
+))
+fig_ev.add_trace(go.Bar(
+    x=transport_df["month"], y=transport_df["ridership"],
+    name="Monthly PT ridership",
+    marker_color="rgba(255,209,102,0.35)",
+    hovertemplate="<b>PT Ridership</b><br>%{x}<br>%{y:,.0f}<extra></extra>",
+    yaxis="y2",
+))
+fig_ev.update_layout(
+    **CHART_LAYOUT, height=360,
+    title="EV Adoption & Public Transport Ridership",
+    yaxis=dict(title="EV Share (%)", showgrid=True, gridcolor="rgba(255,255,255,0.08)"),
+    yaxis2=dict(title="PT Ridership", overlaying="y", side="right", showgrid=False),
+    legend=dict(orientation="h", y=1.08, x=0),
+    barmode="overlay",
+)
+fig_ev.show()
+```
+
+---
+
+## CDC Audit Log — Recent Data Changes
+
+```{python}
+changelog = con.execute("""
+    SELECT
+        strftime(detected_at::timestamptz, '%Y-%m-%d %H:%M') as detected_at,
+        source_name,
+        entity_key,
+        field_name,
+        old_value,
+        new_value,
+        change_type
+    FROM meta.change_log
+    ORDER BY detected_at DESC
+    LIMIT 25
+""").df()
+
+if len(changelog) == 0:
+    print("No changes detected yet — run the pipeline to populate.")
+else:
+    changelog.columns = ["Detected At","Source","Entity","Field","Old Value","New Value","Type"]
+    print(changelog.to_markdown(index=False))
+```
+
+```{python}
+con.close()
+```

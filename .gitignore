@@ -1,0 +1,46 @@
+# ── DuckDB ───────────────────────────────────────────────────────────────────
+# pulse.duckdb IS committed (GitHub Pages pipeline reads from it)
+# but exclude temp/WAL files DuckDB creates during active writes
+warehouse/*.wal
+warehouse/*.tmp
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── dbt ───────────────────────────────────────────────────────────────────────
+transforms/target/
+transforms/logs/
+transforms/dbt_packages/
+
+# ── Quarto build artefacts ────────────────────────────────────────────────────
+# docs/ IS committed — GitHub Pages reads from it
+# Only exclude intermediate files Quarto generates during execution
+.quarto/
+**/*.quarto_ipynb
+_freeze/
+
+# ── OS & editor noise ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log

@@ -1,0 +1,7 @@
+malaysia_pulse:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "../warehouse/pulse.duckdb"
+      threads: 4

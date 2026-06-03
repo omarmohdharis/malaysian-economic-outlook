@@ -1,0 +1,11 @@
+duckdb==1.2.2
+dbt-duckdb==1.9.3
+pandas==2.2.3
+pyarrow==17.0.0
+requests==2.32.3
+plotly==5.24.1
+jupyter==1.1.1
+nbformat==5.10.4
+pyyaml==6.0.2
+quarto
+tabulate==0.9.0
