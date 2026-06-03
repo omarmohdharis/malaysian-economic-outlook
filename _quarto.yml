@@ -8,6 +8,11 @@ website:
   navbar:
     background: dark
     title: "🇲🇾 Malaysian Economic Pulse"
+    left:
+      - text: "Dashboard"
+        href: dashboard/index.qmd
+      - text: "About"
+        href: dashboard/about.qmd
   page-footer:
     center: "Data: data.gov.my · DOSM · Built with DuckDB, dbt, Quarto · Refreshed monthly via GitHub Actions"
 

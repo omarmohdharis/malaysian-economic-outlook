@@ -1,0 +1,191 @@
+---
+title: "About This Project"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+---
+
+## What Is This?
+
+The **Malaysian Economic Pulse** is a fully automated, end-to-end data engineering project that tracks cost-of-living pressure across Malaysia. It ingests open government data, transforms it through a layered data warehouse, and publishes an interactive dashboard — rebuilt and redeployed every month without any manual steps.
+
+The core output is a single **Pulse Score (0–100)** that aggregates five economic signals into one number representing how much financial pressure Malaysian households are under at a given point in time.
+
+---
+
+## Data Sources
+
+All data is sourced from Malaysian open government APIs — no scraping, no proprietary feeds.
+
+| Source | Dataset | Cadence |
+|---|---|---|
+| [data.gov.my](https://data.gov.my) | PriceCatcher grocery prices (50M+ records) | Monthly |
+| [data.gov.my](https://data.gov.my) | Weekly RON95 / RON97 / Diesel fuel prices | Weekly |
+| [data.gov.my](https://data.gov.my) | Public transport ridership (all services) | Monthly |
+| [data.gov.my](https://data.gov.my) | Vehicle registrations by fuel type | Monthly |
+| [DOSM](https://dosm.gov.my) | Consumer Price Index (national + state) | Monthly |
+| [DOSM](https://dosm.gov.my) | Quarterly GDP (nominal) | Quarterly |
+| [DOSM](https://dosm.gov.my) | Quarterly Labour Force Survey | Quarterly |
+| [DOSM](https://dosm.gov.my) | Household income by state (HIES) | Annual |
+
+All datasets are served as **Parquet files** — a columnar binary format that is far more efficient than CSV for analytical workloads. The pipeline reads them directly from remote URLs into DuckDB with no intermediate download step.
+
+---
+
+## Pipeline Architecture
+
+The pipeline runs in three stages, each a separate Python module. The full stack can be triggered locally with one command:
+
+```bash
+python run_pipeline.py          # full run
+python run_pipeline.py --extract  # extraction only
+python run_pipeline.py --cdc      # CDC only
+python run_pipeline.py --dbt      # transforms only
+```
+
+### Stage 1 — Extraction (`ingestion/extract.py`)
+
+The extractor pulls each source into DuckDB's `raw` schema. Two loading strategies are supported:
+
+**Static Parquet** — for datasets that are republished as a single file (CPI, fuel prices, vehicle registrations). The extractor checks a watermark table before fetching — if the source was already loaded today, it skips.
+
+**Monthly Partitioned Parquet** — for PriceCatcher price data, which is published one file per month. The extractor compares already-loaded months against the watermark and only fetches new ones. Each run is idempotent: if a month is re-fetched (e.g., after a failed run), existing rows for that partition are deleted before re-insertion.
+
+Every run writes a record to `meta.pipeline_runs` (status, row count, errors) and updates `meta.source_watermarks` (the high-water mark date per source).
+
+### Stage 2 — Change Data Capture (`ingestion/cdc.py`)
+
+The CDC layer compares freshly extracted raw data against what was previously committed to the warehouse, and logs every detected change to `meta.change_log`. This serves two purposes: the **audit log** visible on the dashboard, and a record of upstream data revisions (government agencies do revise published figures).
+
+Three CDC patterns are implemented:
+
+**Value-based CDC — Fuel prices**
+Every weekly fuel price entry is compared against the warehouse's `fuel_price_history` table. If a date/fuel-type combination is new, it's an `INSERT`. If the price for an existing date changed (rare, but DOSM does revise), it's an `UPDATE`.
+
+**Append CDC — GDP**
+GDP quarters are append-only. The CDC checks whether a new quarter has been published and inserts it. It also detects value revisions — preliminary GDP estimates are routinely revised when final figures are released.
+
+**SCD Type 2 — Household income**
+When a state's household income median changes between survey releases, the old row is expired (`valid_to` set, `is_current = FALSE`) and a new current row is inserted. This preserves full history — you can query what the income was in any past period, not just the latest figure.
+
+### Stage 3 — Transforms (`transforms/`)
+
+Transforms are written in **dbt** (data build tool), which compiles SQL models into a dependency DAG and runs them in the correct order. The model layers are:
+
+```
+raw.*                  ← Stage 1 output (DuckDB tables)
+  └── main_staging.*   ← Staging views (clean, rename, cast)
+        └── main_marts.*  ← Mart tables (aggregated, dashboard-ready)
+```
+
+**Staging models** (`stg_*.sql`) — thin views that standardise column names, cast types, and filter out invalid rows. No aggregation happens here.
+
+**Mart models** (`mart_*.sql`) — materialised tables that join and aggregate staging data into the shapes the dashboard queries directly:
+
+- `mart_fuel_timeline` — weekly fuel prices with annotated up/down direction
+- `mart_price_summary` — monthly median grocery prices by state and item category
+- `mart_economic_pulse` — the composite Pulse Score, one row per month
+
+Three **data tests** run after every dbt build to catch regressions:
+
+- `test_prices_positive` — all median prices must be > 0
+- `test_fuel_change_direction` — change direction must be UP, DOWN, or FLAT
+- `test_pulse_score_range` — all pulse scores must fall between 0 and 100
+
+---
+
+## The Warehouse — DuckDB
+
+The warehouse is a single file: `warehouse/pulse.duckdb`. DuckDB is an embedded analytical database — it runs entirely in-process (no server, no port, no configuration) and is optimised for columnar analytical queries over large datasets.
+
+The warehouse uses multiple schemas to separate concerns:
+
+| Schema | Contents |
+|---|---|
+| `raw` | Raw tables as extracted from source Parquet files |
+| `warehouse` | CDC history tables (fuel price history, GDP, SCD income dim) |
+| `meta` | Pipeline run logs, source watermarks, change log |
+| `main_staging` | dbt staging views |
+| `main_marts` | dbt mart tables (what the dashboard reads) |
+
+The warehouse file is **gitignored** — it is not committed to the repository. Instead, it is rebuilt from scratch on every CI run, which keeps the repo clean and ensures the pipeline is always tested end-to-end.
+
+---
+
+## The Pulse Score
+
+The Pulse Score is a composite index on a 0–100 scale where **higher = more cost-of-living pressure** on Malaysian households.
+
+Each component signal is normalised to 0–1 using min-max scaling across the full historical range, then combined as a weighted average:
+
+| Signal | Weight | Basis |
+|---|---|---|
+| Food prices | **35%** | Food at home (15.7%) + dining out (17.0%) = 32.7% of DOSM HES 2024 |
+| CPI (broad) | **30%** | Covers housing/utilities (23.5%) + health, education, and other categories with no dedicated signal |
+| Fuel — RON95 | **15%** | One component of transport spending (11% of HES); not the full budget |
+| Public transport ridership | **10%** | Transport ≈ 11% of HES; rising ridership signals less pressure |
+| EV adoption | **10%** | Forward-looking modifier; higher EV share = less fuel cost exposure |
+
+Weights are grounded in the **DOSM Household Expenditure Survey 2024** (mean monthly spending RM 5,566). Transport ridership and EV adoption are **inverted signals** — higher values indicate less pressure, not more.
+
+Missing data for any component in a given month defaults to 0.5 (neutral) rather than breaking the score.
+
+---
+
+## Automation — GitHub Actions
+
+The pipeline runs on a scheduled GitHub Actions workflow every month. The workflow:
+
+1. Checks out the repository
+2. Installs Python dependencies and dbt
+3. Runs `python run_pipeline.py` (extract → CDC → dbt run → dbt test)
+4. Runs `quarto render` to regenerate the dashboard HTML
+5. Commits the updated `docs/` folder and pushes to `main`
+6. GitHub Pages serves the updated site automatically
+
+The warehouse is rebuilt from scratch on each CI run — it is never cached or persisted between runs.
+
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| Data format | Apache Parquet |
+| Warehouse | DuckDB |
+| Transforms | dbt |
+| Orchestration | Python (`run_pipeline.py`) |
+| Dashboard | Quarto + Plotly |
+| Hosting | GitHub Pages |
+| CI/CD | GitHub Actions |
+| Language | Python 3.11 |
+
+---
+
+## Repository Structure
+
+```
+malaysian-project/
+├── ingestion/
+│   ├── config.py          # Source definitions and URLs
+│   ├── extract.py         # Stage 1: extraction into DuckDB raw schema
+│   └── cdc.py             # Stage 2: Change Data Capture
+├── transforms/
+│   ├── dbt_project.yml
+│   ├── models/
+│   │   ├── staging/       # stg_cpi, stg_fuel, stg_prices, stg_transport, stg_vehicles, stg_gdp
+│   │   └── marts/         # mart_fuel_timeline, mart_price_summary, mart_economic_pulse
+│   └── tests/             # data quality tests
+├── dashboard/
+│   ├── index.qmd          # Main dashboard page
+│   └── about.qmd          # This page
+├── docs/                  # Rendered HTML output (served by GitHub Pages)
+├── run_pipeline.py        # Local pipeline runner
+├── _quarto.yml            # Quarto site config
+└── requirements.txt       # Python dependencies
+```
+
+---
+
+*Data: [data.gov.my](https://data.gov.my) · [DOSM](https://dosm.gov.my) · Built with DuckDB, dbt, Quarto · Refreshed monthly via GitHub Actions*
