@@ -49,12 +49,12 @@ jobs:
       - name: Render dashboard
         run: quarto render dashboard/index.qmd --output-dir ../docs
 
-      - name: Commit warehouse + deploy pages
+      - name: Commit rendered docs
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add warehouse/pulse.duckdb docs/
-          git diff --staged --quiet || git commit -m "chore: pipeline run ${{ github.run_id }}"
+          git add docs/
+          git diff --staged --quiet || git commit -m "chore: render pipeline run ${{ github.run_id }}"
           git push
 
       - name: Deploy to GitHub Pages

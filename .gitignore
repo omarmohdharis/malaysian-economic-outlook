@@ -1,8 +1,7 @@
-# ── DuckDB ───────────────────────────────────────────────────────────────────
-# pulse.duckdb IS committed (GitHub Pages pipeline reads from it)
-# but exclude temp/WAL files DuckDB creates during active writes
-warehouse/*.wal
-warehouse/*.tmp
+# ── DuckDB warehouse ─────────────────────────────────────────────────────────
+# The database is too large for GitHub (>100MB). GitHub Actions rebuilds it
+# from scratch on every pipeline run by re-fetching from data.gov.my.
+warehouse/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
