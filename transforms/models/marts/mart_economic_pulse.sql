@@ -8,10 +8,16 @@
 --   3. cpi_index            — overall CPI, normalised
 --   4. transport_index      — rail ridership growth (inverse: rising = less car pressure)
 --   5. ev_adoption_index    — EV share of new registrations (inverse signal)
---   6. gdp_growth_signal    — quarterly GDP growth (inverse: good economy = lower pressure)
 --
 -- Score = weighted average of components × 100
--- Weights are documented below and can be tuned.
+--
+-- Weights are grounded in the DOSM Household Expenditure Survey 2024
+-- (mean monthly spending RM5,566; source: dosm.gov.my HES 2024):
+--   food_norm:      35% — food at home (15.7%) + dining out (17.0%) = 32.7% of HES
+--   cpi_norm:       30% — broad catch-all covering housing/utilities (23.5%) + health/education/etc.
+--   fuel_norm:      15% — RON95 is one component of transport (11% of HES); not the full budget
+--   transport_norm: 10% — transport share of HES ≈ 11%
+--   ev_norm:        10% — forward-looking signal; kept as minor modifier
 
 with
 
@@ -127,23 +133,24 @@ select
     ev_share,
 
     -- Weighted composite score (weights sum to 1.0)
+    -- Weights derived from DOSM Household Expenditure Survey 2024
     round(
         (
-            coalesce(food_norm, 0.5)             * 0.30 +   -- food prices: 30%
-            coalesce(fuel_norm, 0.5)             * 0.25 +   -- fuel cost:   25%
-            coalesce(cpi_norm, 0.5)              * 0.25 +   -- CPI:         25%
-            coalesce(transport_pressure_norm,0.5)* 0.10 +   -- transport:   10%
-            coalesce(ev_pressure_norm, 0.5)      * 0.10     -- EV adoption: 10%
+            coalesce(food_norm, 0.5)             * 0.35 +   -- food prices: 35% (food@home 15.7% + dining 17.0% = 32.7% of HES)
+            coalesce(cpi_norm, 0.5)              * 0.30 +   -- CPI:         30% (covers housing/utilities 23.5% + health/edu/etc.)
+            coalesce(fuel_norm, 0.5)             * 0.15 +   -- fuel cost:   15% (RON95 ⊂ transport 11% of HES)
+            coalesce(transport_pressure_norm,0.5)* 0.10 +   -- transport:   10% (transport ≈ 11% of HES)
+            coalesce(ev_pressure_norm, 0.5)      * 0.10     -- EV adoption: 10% (forward-looking modifier)
         ) * 100
     , 1)                                        as pulse_score,
 
     -- Readable pressure label
     case
-        when (coalesce(food_norm,0.5)*0.30 + coalesce(fuel_norm,0.5)*0.25 +
-              coalesce(cpi_norm,0.5)*0.25 + coalesce(transport_pressure_norm,0.5)*0.10 +
+        when (coalesce(food_norm,0.5)*0.35 + coalesce(cpi_norm,0.5)*0.30 +
+              coalesce(fuel_norm,0.5)*0.15 + coalesce(transport_pressure_norm,0.5)*0.10 +
               coalesce(ev_pressure_norm,0.5)*0.10) < 0.33  then 'Low Pressure'
-        when (coalesce(food_norm,0.5)*0.30 + coalesce(fuel_norm,0.5)*0.25 +
-              coalesce(cpi_norm,0.5)*0.25 + coalesce(transport_pressure_norm,0.5)*0.10 +
+        when (coalesce(food_norm,0.5)*0.35 + coalesce(cpi_norm,0.5)*0.30 +
+              coalesce(fuel_norm,0.5)*0.15 + coalesce(transport_pressure_norm,0.5)*0.10 +
               coalesce(ev_pressure_norm,0.5)*0.10) < 0.66  then 'Moderate Pressure'
         else                                                     'High Pressure'
     end                                         as pressure_label

@@ -21,7 +21,7 @@ def run(cmd: list[str], cwd: Path = ROOT) -> None:
     print(f"\n>> {' '.join(cmd)}  (cwd: {cwd})\n")
     result = subprocess.run(cmd, cwd=cwd)
     if result.returncode != 0:
-        print(f"\n✗ Command failed: {' '.join(cmd)}", file=sys.stderr)
+        print(f"\nFAILED Command failed: {' '.join(cmd)}", file=sys.stderr)
         sys.exit(result.returncode)
 
 
@@ -44,7 +44,7 @@ def main():
         run(["dbt", "run"],  cwd=ROOT / "transforms")
         run(["dbt", "test"], cwd=ROOT / "transforms")
 
-    print("\n✓ Pipeline complete.\n")
+    print("\nOK Pipeline complete.\n")
 
 
 if __name__ == "__main__":

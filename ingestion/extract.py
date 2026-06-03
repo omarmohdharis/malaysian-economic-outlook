@@ -65,9 +65,9 @@ def _log_run(
     rows_loaded: int = 0, new_rows: int = 0,
     error: str = None, notes: str = None
 ) -> None:
-    run_id = f"{source_name}__{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    run_id = f"{source_name}__{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}"
     con.execute("""
-        INSERT INTO meta.pipeline_runs
+        INSERT OR REPLACE INTO meta.pipeline_runs
             (run_id, source_name, run_at, status, rows_loaded, new_rows, error_message, notes)
         VALUES (?, ?, now(), ?, ?, ?, ?, ?)
     """, [run_id, source_name, status, rows_loaded, new_rows, error, notes])
@@ -102,7 +102,7 @@ def extract_static_parquet(con: duckdb.DuckDBPyConnection, source_name: str, con
     if watermark:
         last = watermark["last_loaded_at"]
         if hasattr(last, "date") and last.date() == datetime.now(timezone.utc).date():
-            print(f"  [{source_name}] Already loaded today — skipping.")
+            print(f"  [{source_name}] Already loaded today -- skipping.")
             _log_run(con, source_name, "skipped", notes="Already loaded today")
             return
 
@@ -115,10 +115,10 @@ def extract_static_parquet(con: duckdb.DuckDBPyConnection, source_name: str, con
         rows = len(df)
         _update_watermark(con, source_name, rows)
         _log_run(con, source_name, "success", rows_loaded=rows, new_rows=rows)
-        print(f"  [{source_name}] ✓ {rows:,} rows loaded.")
+        print(f"  [{source_name}] OK {rows:,} rows loaded.")
     except Exception as e:
         _log_run(con, source_name, "failed", error=str(e))
-        print(f"  [{source_name}] ✗ Failed: {e}", file=sys.stderr)
+        print(f"  [{source_name}] FAILED: {e}", file=sys.stderr)
 
 
 def extract_monthly_partitioned(con: duckdb.DuckDBPyConnection, source_name: str, config: dict) -> None:
@@ -165,9 +165,9 @@ def extract_monthly_partitioned(con: duckdb.DuckDBPyConnection, source_name: str
 
             total_new += len(df)
             last_successful_month = month
-            print(f"  [{source_name}] ✓ {month}: {len(df):,} rows.")
+            print(f"  [{source_name}] OK {month}: {len(df):,} rows.")
         except Exception as e:
-            print(f"  [{source_name}] ✗ {month} failed: {e} — skipping.", file=sys.stderr)
+            print(f"  [{source_name}] FAILED {month} failed: {e} -- skipping.", file=sys.stderr)
 
     if last_successful_month:
         total_rows = con.execute(f"SELECT count(*) FROM raw.{source_name}").fetchone()[0]
@@ -194,7 +194,7 @@ def run_all(sources: list[str] | None = None) -> None:
         elif config["type"] == "monthly_partitioned_parquet":
             extract_monthly_partitioned(con, name, config)
         else:
-            print(f"  [{name}] Unknown source type '{config['type']}' — skipping.")
+            print(f"  [{name}] Unknown source type '{config['type']}' -- skipping.")
 
     print(f"\n{'='*60}")
     print("  Extraction complete.")
