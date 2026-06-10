@@ -56,7 +56,7 @@ data.gov.my / DOSM
 | `main_staging` | dbt staging views |
 | `main_marts` | dbt mart tables (dashboard-ready) |
 
-The warehouse file (`warehouse/pulse.duckdb`) is gitignored and rebuilt from scratch on every CI run.
+The warehouse file (`warehouse/pulse.duckdb`) is gitignored and rebuilt from scratch on every CI run. CDC state survives the rebuild: the change log and history tables are snapshotted to parquet files in `state/` (committed to git) after every run and restored at the start of the next one, so the change log is a true running history across runs.
 
 ### Change Data Capture
 
@@ -96,7 +96,9 @@ quarto render
 ├── ingestion/
 │   ├── config.py          # Source definitions and URLs
 │   ├── extract.py         # Extraction into DuckDB raw schema
-│   └── cdc.py             # Change Data Capture
+│   ├── cdc.py             # Change Data Capture
+│   └── state.py           # Persist/restore CDC state across CI runs
+├── state/                 # Parquet snapshots of CDC state (committed)
 ├── transforms/
 │   ├── models/
 │   │   ├── staging/       # stg_cpi, stg_fuel, stg_prices, stg_transport, stg_vehicles, stg_gdp

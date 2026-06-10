@@ -58,6 +58,8 @@ Every run writes a record to `meta.pipeline_runs` (status, row count, errors) an
 
 The CDC layer compares freshly extracted raw data against what was previously committed to the warehouse, and logs every detected change to `meta.change_log`. This serves two purposes: the **audit log** visible on the dashboard, and a record of upstream data revisions (government agencies do revise published figures).
 
+Because the warehouse itself is rebuilt from scratch in CI, the CDC state is persisted separately (`ingestion/state.py`): the change log and history tables are exported to small parquet snapshots in `state/` after every run, committed to git, and restored at the start of the next run. Without this, every CI run would be a cold load where all data looks new and revisions could never be detected.
+
 Three CDC patterns are implemented:
 
 **Value-based CDC — Fuel prices**
@@ -109,7 +111,7 @@ The warehouse uses multiple schemas to separate concerns:
 | `main_staging` | dbt staging views |
 | `main_marts` | dbt mart tables (what the dashboard reads) |
 
-The warehouse file is **gitignored** — it is not committed to the repository. Instead, it is rebuilt from scratch on every CI run, which keeps the repo clean and ensures the pipeline is always tested end-to-end.
+The warehouse file is **gitignored** — it is not committed to the repository. Instead, it is rebuilt from scratch on every CI run, which keeps the repo clean and ensures the pipeline is always tested end-to-end. The exception is CDC state: the `meta` change log and the `warehouse` history tables are snapshotted to parquet files in `state/` (committed to git) so change history accumulates across runs instead of resetting.
 
 ---
 
@@ -139,12 +141,14 @@ The pipeline runs on a scheduled GitHub Actions workflow every month. The workfl
 
 1. Checks out the repository
 2. Installs Python dependencies and dbt
-3. Runs `python run_pipeline.py` (extract → CDC → dbt run → dbt test)
-4. Runs `quarto render` to regenerate the dashboard HTML
-5. Commits the updated `docs/` folder and pushes to `main`
-6. GitHub Pages serves the updated site automatically
+3. Restores CDC state from `state/` parquet snapshots into a fresh warehouse
+4. Runs extraction → CDC → dbt run → dbt test
+5. Exports updated CDC state back to `state/`
+6. Runs `quarto render` to regenerate the dashboard HTML
+7. Commits the updated `docs/` and `state/` folders and pushes to `main`
+8. GitHub Pages serves the updated site automatically
 
-The warehouse is rebuilt from scratch on each CI run — it is never cached or persisted between runs.
+The bulky raw data is rebuilt from scratch on each CI run; only the small CDC state tables persist between runs, via the committed parquet snapshots.
 
 ---
 
@@ -170,7 +174,9 @@ malaysian-project/
 ├── ingestion/
 │   ├── config.py          # Source definitions and URLs
 │   ├── extract.py         # Stage 1: extraction into DuckDB raw schema
-│   └── cdc.py             # Stage 2: Change Data Capture
+│   ├── cdc.py             # Stage 2: Change Data Capture
+│   └── state.py           # Persist/restore CDC state across CI runs
+├── state/                 # Parquet snapshots of CDC state (committed)
 ├── transforms/
 │   ├── dbt_project.yml
 │   ├── models/

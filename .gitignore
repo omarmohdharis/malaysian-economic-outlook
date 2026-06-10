@@ -1,6 +1,7 @@
 # ── DuckDB warehouse ─────────────────────────────────────────────────────────
 # The database is too large for GitHub (>100MB). GitHub Actions rebuilds it
 # from scratch on every pipeline run by re-fetching from data.gov.my.
+# CDC state survives via parquet snapshots in state/ (committed to git).
 warehouse/
 
 # ── Python ────────────────────────────────────────────────────────────────────

@@ -34,11 +34,17 @@ def main():
 
     run_all = not any([args.extract, args.cdc, args.dbt])
 
+    if run_all:
+        # Restore CDC state first (no-op locally if the warehouse already has it)
+        run([sys.executable, "state.py", "import"], cwd=ROOT / "ingestion")
+
     if run_all or args.extract:
         run([sys.executable, "extract.py"], cwd=ROOT / "ingestion")
 
     if run_all or args.cdc:
         run([sys.executable, "cdc.py"], cwd=ROOT / "ingestion")
+        # Snapshot CDC state so it can be committed and restored by CI
+        run([sys.executable, "state.py", "export"], cwd=ROOT / "ingestion")
 
     if run_all or args.dbt:
         run(["dbt", "run"],  cwd=ROOT / "transforms")

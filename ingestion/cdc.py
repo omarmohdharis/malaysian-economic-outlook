@@ -18,6 +18,7 @@ import duckdb
 import pandas as pd
 
 from config import WAREHOUSE_PATH
+from state import WAREHOUSE_DDL
 
 
 def get_connection() -> duckdb.DuckDBPyConnection:
@@ -42,16 +43,8 @@ def cdc_fuel_prices(con: duckdb.DuckDBPyConnection) -> int:
     This is the clearest CDC example in the project — every Wednesday price
     update in Malaysia becomes a discrete change event.
     """
-    # Ensure the SCD table exists
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS warehouse.fuel_price_history (
-            date_effective  DATE NOT NULL,
-            fuel_type       VARCHAR NOT NULL,
-            price           DOUBLE NOT NULL,
-            loaded_at       TIMESTAMPTZ NOT NULL,
-            PRIMARY KEY (date_effective, fuel_type)
-        )
-    """)
+    # Ensure the history table exists (DDL shared with state.py)
+    con.execute(WAREHOUSE_DDL["warehouse.fuel_price_history"])
 
     # Get raw fuel prices
     try:
@@ -119,15 +112,7 @@ def cdc_fuel_prices(con: duckdb.DuckDBPyConnection) -> int:
 
 def cdc_gdp(con: duckdb.DuckDBPyConnection) -> int:
     """Detect new quarters published in the GDP dataset."""
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS warehouse.gdp_quarterly (
-            quarter     VARCHAR NOT NULL,
-            series      VARCHAR NOT NULL,
-            value       DOUBLE,
-            loaded_at   TIMESTAMPTZ NOT NULL,
-            PRIMARY KEY (quarter, series)
-        )
-    """)
+    con.execute(WAREHOUSE_DDL["warehouse.gdp_quarterly"])
 
     try:
         raw = con.execute("SELECT * FROM raw.gdp_quarterly").df()
@@ -183,18 +168,7 @@ def cdc_household_income(con: duckdb.DuckDBPyConnection) -> int:
     the old row is expired (valid_to set) and a new current row is inserted.
     This lets you query 'what was the income here in 2020?' correctly.
     """
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS warehouse.dim_household_income (
-            geography       VARCHAR NOT NULL,
-            geography_type  VARCHAR NOT NULL,   -- 'state' | 'national'
-            income_mean     DOUBLE,
-            income_median   DOUBLE,
-            survey_year     INTEGER NOT NULL,
-            valid_from      DATE NOT NULL,
-            valid_to        DATE,               -- NULL means current
-            is_current      BOOLEAN NOT NULL DEFAULT TRUE
-        )
-    """)
+    con.execute(WAREHOUSE_DDL["warehouse.dim_household_income"])
 
     try:
         raw = con.execute("SELECT * FROM raw.household_income").df()
@@ -213,6 +187,10 @@ def cdc_household_income(con: duckdb.DuckDBPyConnection) -> int:
         print(f"  [cdc_income] Unexpected columns: {list(raw.columns)}")
         return 0
 
+    # Process oldest survey first so the dim builds history in order, and a
+    # historical row never expires a newer current row (idempotent re-runs).
+    raw = raw.sort_values(year_col)
+
     changes = 0
     for _, row in raw.iterrows():
         geo   = str(row[geo_col])
@@ -221,7 +199,7 @@ def cdc_household_income(con: duckdb.DuckDBPyConnection) -> int:
         mean  = float(row[mean_col]) if mean_col and pd.notna(row.get(mean_col)) else None
 
         current = con.execute("""
-            SELECT income_median, income_mean FROM warehouse.dim_household_income
+            SELECT income_median, income_mean, survey_year FROM warehouse.dim_household_income
             WHERE geography = ? AND is_current = TRUE
         """, [geo]).fetchone()
 
@@ -233,9 +211,15 @@ def cdc_household_income(con: duckdb.DuckDBPyConnection) -> int:
             """, [geo, mean, med, year])
             _write_change(con, "household_income", geo, "income_median", None, med, "INSERT")
             changes += 1
+            continue
 
-        elif current[0] is not None and abs(float(current[0]) - (med or 0)) > 1.0:
-            # Income figure changed — expire old row, insert new one (SCD Type 2)
+        # Only a survey at least as new as the current row can change the dim;
+        # older surveys are already represented in the expired history.
+        if year < current[2]:
+            continue
+
+        if current[0] is not None and abs(float(current[0]) - (med or 0)) > 1.0:
+            # New survey or revision — expire old row, insert new one (SCD Type 2)
             con.execute("""
                 UPDATE warehouse.dim_household_income
                 SET valid_to = CURRENT_DATE, is_current = FALSE

@@ -28,6 +28,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # The warehouse is rebuilt from scratch each run, so CDC state
+      # (change log, history tables) is restored from committed parquet
+      # files first — otherwise every run would look like a cold load.
+      - name: Restore CDC state
+        working-directory: ingestion
+        run: python state.py import
+
       - name: Run extraction
         working-directory: ingestion
         run: python extract.py
@@ -35,6 +42,10 @@ jobs:
       - name: Run CDC
         working-directory: ingestion
         run: python cdc.py
+
+      - name: Export CDC state
+        working-directory: ingestion
+        run: python state.py export
 
       - name: Run dbt transforms
         working-directory: transforms
@@ -49,11 +60,11 @@ jobs:
       - name: Render dashboard
         run: quarto render dashboard/index.qmd --output-dir ../docs
 
-      - name: Commit rendered docs
+      - name: Commit rendered docs and CDC state
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/
+          git add docs/ state/
           git diff --staged --quiet || git commit -m "chore: render pipeline run ${{ github.run_id }}"
           git push
 
