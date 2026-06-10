@@ -57,8 +57,11 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      # Full project render — _quarto.yml routes output to docs/ inside the
+      # repo. (A --output-dir override resolves relative to the project root,
+      # which previously sent the HTML outside the repo entirely.)
       - name: Render dashboard
-        run: quarto render dashboard/index.qmd --output-dir ../docs
+        run: quarto render
 
       - name: Commit rendered docs and CDC state
         run: |
